@@ -1,0 +1,26 @@
+"""
+Builds a map from exported triangles & verticies
+"""
+
+import bpy
+import json
+
+file_path = r"L:\SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\csgo\maps\cs_italy.json" # set your JSON here
+
+with open(file_path, 'r') as f:
+    data = json.load(f)
+
+vertices = [(float(v["x"]), float(v["y"]), float(v["z"])) for v in data["verticies"]]
+
+faces = [(float(v["x"]), float(v["y"]), float(v["z"])) for v in data["triangles"]]
+
+mesh = bpy.data.meshes.new("ImportedMesh")
+obj = bpy.data.objects.new("ImportedObject", mesh)
+bpy.context.scene.collection.objects.link(obj)
+
+mesh.from_pydata(vertices, [], faces)
+mesh.update()
+
+bpy.context.view_layer.objects.active = obj
+bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+obj.location = (0, 0, 0)
