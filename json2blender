@@ -1,26 +1,29 @@
 """
 Builds a map from exported triangles & verticies
 """
+# === USER INPUT ===
+file_path = "L:\SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\csgo\maps\de_inferno.json"  # <-- Change this to your JSON file path
 
-import bpy
-import json
-
-file_path = r"L:\SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\csgo\maps\cs_italy.json" # set your JSON here
-
+# === LOAD JSON DATA ===
 with open(file_path, 'r') as f:
     data = json.load(f)
 
-vertices = [(float(v["x"]), float(v["y"]), float(v["z"])) for v in data["verticies"]]
+# Extract vertices and triangles
+vertices = [(v["x"], v["y"], v["z"]) for v in data["verticies"]]
+faces = [(t["x"], t["y"], t["z"]) for t in data["triangles"]]
 
-faces = [(float(v["x"]), float(v["y"]), float(v["z"])) for v in data["triangles"]]
-
+# === CREATE MESH AND OBJECT ===
 mesh = bpy.data.meshes.new("ImportedMesh")
 obj = bpy.data.objects.new("ImportedObject", mesh)
 bpy.context.scene.collection.objects.link(obj)
 
+# Fill the mesh with vertices and faces
 mesh.from_pydata(vertices, [], faces)
 mesh.update()
 
+# === OPTIONAL: CENTER OBJECT IN SCENE ===
 bpy.context.view_layer.objects.active = obj
 bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
 obj.location = (0, 0, 0)
+
+print(f"Imported {len(vertices)} vertices and {len(faces)} faces from {file_path}")
