@@ -1,8 +1,12 @@
-﻿using SteamDatabase.ValvePak;
+using SteamDatabase.ValvePak;
+using System.Collections.Immutable;
+using System.Text;
 using System.Text.Json;
 using ValveResourceFormat;
+using ValveResourceFormat.IO;
 using ValveResourceFormat.ResourceTypes;
 using ValveResourceFormat.ResourceTypes.RubikonPhysics;
+using ValveResourceFormat.Serialization.KeyValues;
 namespace VPKParser
 {
     public record VPKFile(string path, string name, bool isMap, string? triangles_verticies = null);
@@ -31,18 +35,16 @@ namespace VPKParser
                     Random r = new Random();
                     if (package.Entries.ContainsKey("vmdl_c") && !parsed)
                     {
+                        var vmdl_c = package.Entries["vmdl_c"].Where(x => x.FileName == "world_physics").First();
                         isMap = true;
-                        foreach (var vmdl_c in package.Entries["vmdl_c"])
-                        {
-                            byte[] vmdl_b = new byte[vmdl_c.TotalLength];
-                            package.ReadEntry(vmdl_c, vmdl_b);
-                            MemoryStream ms = new MemoryStream(vmdl_b);
-                            var res = new Resource();
-                            res.Read(ms);
-                            ms.Close();
-                            blocks.AddRange(res.Blocks.Where(b => b.GetType() == typeof(PhysAggregateData)));
-                            parsed = true;
-                        }
+                        byte[] vmdl_b = new byte[vmdl_c.TotalLength];
+                        package.ReadEntry(vmdl_c, vmdl_b);
+                        MemoryStream ms = new MemoryStream(vmdl_b);
+                        var res = new Resource();
+                        res.Read(ms);
+                        ms.Close();
+                        blocks.Add(((Model) res.DataBlock).GetEmbeddedPhys());
+                        parsed = true;
                     }
                 }catch(Exception e)
                 {
@@ -83,7 +85,26 @@ namespace VPKParser
                             {
                                 foreach (var mesh in part.Shape.Meshes)
                                 {
-                                    if (mesh.Shape.Materials.Length == 0) continue; // мы не рисуем триггеры и прочие элементы без материалов
+                                    string[] attrs = ((KVObject)dataBlock.CollisionAttributes[mesh.CollisionAttributeIndex]
+                                        .Where(x => x.Key == "m_InteractAsStrings" || x.Key == "m_PhysicsTagStrings").First().Value).ToArray().Select(xx => (string)xx.Value).ToArray();
+                                    string[] attrs2 = ((KVObject)dataBlock.CollisionAttributes[mesh.CollisionAttributeIndex]
+                                        .Where(x => x.Key == "m_InteractExcludeStrings").First().Value).ToArray().Select(xx => (string)xx.Value).ToArray();
+                                    int attrs3 = ((KVObject)dataBlock.CollisionAttributes[mesh.CollisionAttributeIndex]
+                                        .Where(x => x.Key == "m_InteractExclude").First().Value).ToArray().Count();                                    
+
+                                    if ( // skip anything specially hidden, or that we shouldn't render
+                                        attrs2.Contains("player") ||
+                                        attrs2.Contains("npc") || 
+                                        attrs3 != 0 || 
+                                        attrs.Contains("sky") ||
+                                        attrs.Contains("csgo_grenadeclip") ||
+                                        attrs.Contains("npcclip") || 
+                                        attrs.Contains("playerclip") ||
+                                        attrs.Contains("window")
+                                    )
+                                    {
+                                        continue;
+                                    }
                                     verticies.AddRange(mesh.Shape.GetVertices().ToArray().Select(t => new Vector3Ser(t.X, t.Y, t.Z)));
                                     triangles.AddRange(mesh.Shape.GetTriangles().ToArray().Select(t => new Vector3Ser(t.X, t.Y, t.Z)));
                                 }
@@ -91,7 +112,7 @@ namespace VPKParser
                         }
                         catch (Exception e )
                         {
-                            Console.WriteLine(dataBlock_b);
+                            //Console.WriteLine(dataBlock_b);
                             Console.WriteLine(e.Message);
                             Console.WriteLine(e.StackTrace);
                         }
